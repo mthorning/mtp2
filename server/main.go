@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"io/ioutil"
 	"log"
@@ -15,7 +16,9 @@ const DIR = "./images"
 
 func main() {
 	http.HandleFunc("/images", list_images)
-	http.HandleFunc("/image/", image_handler)
+	http.HandleFunc("/image/", get_image)
+	http.HandleFunc("/remove/", remove_image)
+	http.HandleFunc("/add", add_image)
 
 	log.Fatal(http.ListenAndServe(":8000", nil))
 }
@@ -29,7 +32,8 @@ type Error interface {
 	Error() string
 }
 
-func send_error(w http.ResponseWriter, err Error) {
+func send_error(w http.ResponseWriter, err Error, log_message ...any) {
+        log.Println(log_message...)
 	w.WriteHeader(http.StatusBadRequest)
 	w.Write([]byte(err.Error()))
 
@@ -41,7 +45,7 @@ func list_images(w http.ResponseWriter, r *http.Request) {
 
 	files, err := ioutil.ReadDir(DIR)
 	if err != nil {
-		send_error(w, err)
+		send_error(w, err, "Error: Could not read directory")
 		return
 	}
 
@@ -49,65 +53,72 @@ func list_images(w http.ResponseWriter, r *http.Request) {
 	for _, file := range files {
 		file_name := file.Name()
 		if matched, _ := regexp.MatchString(".(jpg|jpeg)$", file_name); matched {
-			images = append(images, Image{Name: strings.Split(file_name, ".")[0], URL: "/image/" + file_name})
+                        image_name := strings.Replace(strings.Split(file_name, ".")[0], "_", " ", -1)
+			images = append(images, Image{Name: image_name, URL: "/image/" + file_name})
 		}
 	}
 	res, err := json.Marshal(images)
 
 	if err != nil {
-		send_error(w, err)
+		send_error(w, err, "Error: Could not marshal images")
 		return
 	}
 
 	w.Write(res)
 }
 
-func image_handler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		http.ServeFile(w, r, DIR+"/"+strings.Replace(r.URL.Path, "/image/", "", 1))
-	case "DELETE":
-                err := os.Remove(DIR + "/uploads/" + strings.Replace(r.URL.Path, "/image/", "", 1))
-                if err != nil {
-                        send_error(w, err)
-                        return
-                }
-	case "POST":
-		err := r.ParseMultipartForm(32 << 20)
-		if err != nil {
-			send_error(w, err)
-			return
-		}
+func get_image(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, DIR+"/"+strings.Replace(r.URL.Path, "/image/", "", 1))
+}
 
-		title := r.FormValue("title")
-
-		// Get image from form
-		image, _, err := r.FormFile("image")
-		if err != nil {
-			send_error(w, err)
-			return
-		}
-		defer image.Close()
-
-		// Create new file
-		dst, err := os.Create(
-			DIR + "/uploads/" + strings.Replace(
-				strings.ToLower(title), " ", "_", -1,
-			) + ".jpg",
-		)
-
-		if err != nil {
-			send_error(w, err)
-			return
-		}
-		defer dst.Close()
-
-		// Copy image to new file
-		if _, err := io.Copy(dst, image); err != nil {
-			send_error(w, err)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
+func remove_image(w http.ResponseWriter, r *http.Request) {
+        file_name := DIR + "/" + strings.Replace(r.URL.Path, "/image/", "", 1)
+	err := os.Remove(file_name)
+	if err != nil {
+		send_error(w, err, "Error: Could not remove file", file_name)
+		return
 	}
+}
+
+func add_image(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseMultipartForm(32 << 20)
+	if err != nil {
+		send_error(w, err, "Error: Could not parse form")
+		return
+	}
+
+	title := r.FormValue("title")
+
+	if title == "" {
+		send_error(w, errors.New("Title is required"), "Error: No title for image")
+		return
+	}
+	log.Println("Received image: " + title)
+
+	// Get image from form
+	image, _, err := r.FormFile("image")
+	if err != nil {
+		send_error(w, err, "Error: Could not get image from form")
+		return
+	}
+	defer image.Close()
+
+	// Create new file
+        file_name := DIR + "/" + strings.Replace(title, " ", "_", -1) + ".jpg"
+	dst, err := os.Create(file_name)
+
+	if err != nil {
+		send_error(w, err, "Error: Could not create file")
+		return
+	}
+	defer dst.Close()
+
+	// Copy image to new file
+	if _, err := io.Copy(dst, image); err != nil {
+		send_error(w, err, "Error: Could not copy contents to file")
+		return
+	}
+        log.Println("Image saved as: " + file_name)
+
+	w.WriteHeader(http.StatusOK)
 }
