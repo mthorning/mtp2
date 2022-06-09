@@ -1,5 +1,6 @@
 package main
 
+
 import (
 	"encoding/json"
 	"errors"
@@ -49,7 +50,7 @@ func list_images(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var images []Image
+	images := []Image{}
 	for _, file := range files {
 		file_name := file.Name()
 		if matched, _ := regexp.MatchString(".(jpg|jpeg)$", file_name); matched {
@@ -57,6 +58,7 @@ func list_images(w http.ResponseWriter, r *http.Request) {
 			images = append(images, Image{Name: image_name, URL: "/image/" + file_name})
 		}
 	}
+
 	res, err := json.Marshal(images)
 
 	if err != nil {
@@ -68,16 +70,22 @@ func list_images(w http.ResponseWriter, r *http.Request) {
 }
 
 func get_image(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, DIR+"/"+strings.Replace(r.URL.Path, "/image/", "", 1))
+        log.Println("Received request for image: " + r.URL.Path)
+
+        file_name := DIR + "/" + strings.Replace(r.URL.Path, "/image/", "", 1)
+        log.Println("Serving filename" + file_name)
+
+	http.ServeFile(w, r, file_name)
 }
 
 func remove_image(w http.ResponseWriter, r *http.Request) {
-        file_name := DIR + "/" + strings.Replace(r.URL.Path, "/image/", "", 1)
+        file_name := DIR + "/" + strings.Replace(r.URL.Path, "/remove/", "", 1) + ".jpg"
 	err := os.Remove(file_name)
 	if err != nil {
 		send_error(w, err, "Error: Could not remove file", file_name)
 		return
 	}
+        log.Println("Removed file: " + file_name)
 }
 
 func add_image(w http.ResponseWriter, r *http.Request) {
