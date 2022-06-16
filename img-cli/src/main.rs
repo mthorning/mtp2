@@ -1,5 +1,5 @@
 use clap::Parser;
-use reqwest::blocking::{multipart::Form, Client};
+use reqwest::{header::AUTHORIZATION, blocking::{multipart::Form, Client}};
 use serde::Deserialize;
 use std::io;
 use std::{str, path::PathBuf};
@@ -57,7 +57,10 @@ fn run_program() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn get_image_list() -> Result<Vec<Image>, Box<dyn std::error::Error>> {
-    let res = reqwest::blocking::get(format!("{}/images", API_URL))?;
+    let client = reqwest::blocking::Client::new();
+let res = client.get(format!("{}/images", API_URL))
+    .header(AUTHORIZATION, "Bearer foo")
+    .send()?;
 
     if res.status().is_success() {
         let mut body: Vec<Image> = res.json()?;

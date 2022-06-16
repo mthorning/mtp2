@@ -41,6 +41,14 @@ func send_error(w http.ResponseWriter, err Error, log_message ...any) {
 }
 
 func list_images(w http.ResponseWriter, r *http.Request) {
+        auth_token := r.Header.Get("Authorization")
+        if auth_token != "bar" {
+	        w.WriteHeader(http.StatusUnauthorized)
+	        w.Write([]byte("Unauthorized"))
+                return
+        }
+        log.Println("Received request for images: " + auth_token)
+
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
 	w.Header().Set("Access-Control-Allow-Methods", "GET")
 
@@ -89,6 +97,7 @@ func remove_image(w http.ResponseWriter, r *http.Request) {
 }
 
 func add_image(w http.ResponseWriter, r *http.Request) {
+
 	err := r.ParseMultipartForm(32 << 20)
 	if err != nil {
 		send_error(w, err, "Error: Could not parse form")
